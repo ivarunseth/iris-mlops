@@ -38,6 +38,11 @@ def predict():
     return response, 200
 
 
+@api.get('/metrics')
+def metrics():
+    return get_metrics(), 200
+
+
 @api.errorhandler(400)
 def bad_request(error):
     return {'error': error.description}, 400
@@ -50,6 +55,10 @@ def exception(error):
 
 @api.after_request
 def after_request(response: Response):
+    latency = (timestamp() - g.t) * 1000
+
+    append_request(request.path, response.status_code, latency)
+    
     environ = {k: v for k, v in request.environ.items() if isinstance(v, (str, bytes))}
 
     if 'wsgi.input' in request.environ and request.is_json:
@@ -60,7 +69,7 @@ def after_request(response: Response):
         'request': environ,
         'response': response.get_json(),
         'status': response.status,
-        'latency': (timestamp() - g.t) * 1000
+        'latency': latency
     })
 
     return response
