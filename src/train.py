@@ -32,13 +32,13 @@ def main(settings: Settings) -> Dict[str, Any]:
     }
 
     preprocess = Pipeline([("scaler", StandardScaler())])
-    best = {"name": None, "acc": -1.0, "f1": -1.0, "run_id": None}
+    best = {"algorithm": None, "acc": -1.0, "f1": -1.0, "run_id": None}
 
-    for name, estimator in candidates.items():
-        pipe = Pipeline([("preprocess", preprocess), ("model", estimator)])
+    for algorithm, model in candidates.items():
+        pipe = Pipeline([("preprocess", preprocess), ("model", model)])
 
         # Retrieve parameter grid from settings
-        param_grid = settings.param_grids.get(name, {})
+        param_grid = settings.param_grids.get(algorithm, {})
 
         grid = GridSearchCV(
             estimator=pipe,
@@ -56,7 +56,7 @@ def main(settings: Settings) -> Dict[str, Any]:
             best_pipe = grid.best_estimator_
 
             # Log algorithm name & best parameters
-            mlflow.log_param("algorithm", name)
+            mlflow.log_param("algorithm", algorithm)
             mlflow.log_params(grid.best_params_)
 
             # Metrics
@@ -78,7 +78,7 @@ def main(settings: Settings) -> Dict[str, Any]:
 
             print({
                 "event": "trained",
-                "model": name,
+                "algorithm": algorithm,
                 "best_params": grid.best_params_,
                 "val_accuracy": acc,
                 "val_f1_macro": f1_macro
@@ -86,13 +86,15 @@ def main(settings: Settings) -> Dict[str, Any]:
 
             if acc > best["acc"]:
                 best.update({
-                    "name": name,
+                    "algorithm": algorithm,
                     "acc": acc,
                     "f1": f1_macro,
                     "run_id": run.info.run_id
                 })
 
     print({"event": "best_model", "best": best})
+
+    return best
 
 
 if __name__ == "__main__":
