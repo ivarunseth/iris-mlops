@@ -17,8 +17,8 @@ def get_best_run_id(settings: Settings) -> str:
     """
     Query MLflow for the best run based on val_accuracy.
     """
-    if cfg.mlflow_tracking_uri:
-        mlflow.set_tracking_uri(cfg.mlflow_tracking_uri)
+    if settings.mlflow_tracking_uri:
+        mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
     client = MlflowClient()
     runs = client.search_runs(
         experiment_ids=[client.get_experiment_by_name(settings.experiment_name).experiment_id],
@@ -39,11 +39,15 @@ def get_best_run_id(settings: Settings) -> str:
     return best_run.info.run_id
 
 
-if __name__ == "__main__":
-    cfg = Settings()
-    best_run_id = get_best_run_id(cfg)
-    version = register_best_model({"run_id": best_run_id}, cfg)
+def main():
+    settings = Settings()
+    best_run_id = get_best_run_id(settings)
+    version = register_best_model({"run_id": best_run_id}, settings)
     print({
-        "registered_model": cfg.registered_model_name,
+        "registered_model": settings.registered_model_name,
         "version": version
     })
+
+
+if __name__ == "__main__":
+    main()

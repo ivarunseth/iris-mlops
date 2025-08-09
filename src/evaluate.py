@@ -47,7 +47,7 @@ def evaluate_latest(settings: Settings = Settings(), alias: str = "production"):
     return metrics
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "alias",
@@ -56,3 +56,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     evaluate_latest(alias=args.alias)
+
+
+if __name__ == "__main__":
+    main()

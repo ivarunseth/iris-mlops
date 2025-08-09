@@ -106,7 +106,7 @@ def demote_latest_auto(settings=Settings()):
     raise ValueError(f"No production or staging alias to demote for version {latest_version}")
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=["promote", "demote"])
     args = parser.parse_args()
@@ -115,3 +115,7 @@ if __name__ == "__main__":
         promote_latest_auto()
     elif args.action == "demote":
         demote_latest_auto()
+
+
+if __name__ == "__main__":
+    main()
