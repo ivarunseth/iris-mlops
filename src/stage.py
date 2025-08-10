@@ -1,12 +1,38 @@
-import argparse
-import mlflow
-import time
+"""
+MLflow model staging and promotion utilities.
 
-from settings import Settings
+This module provides helper functions to:
+- Wait for a model version to reach READY state.
+- Assign or delete aliases (e.g., 'staging', 'production') for registered models.
+- Promote the latest version through staging to production.
+- Demote models from production back to staging, or remove aliases entirely.
+
+The CLI supports two actions:
+    promote → Promote latest model version (None → staging → production)
+    demote  → Demote latest model version (production → staging → remove)
+"""
+
+import time
+import argparse
+
+import mlflow
+
+from .settings import Settings
 
 
 def wait_until_ready(client, name, version, timeout_s=120):
-    """Wait until a model version is in READY status."""
+    """
+    Wait until a specific model version reaches READY status.
+
+    Args:
+        client (MlflowClient): The MLflow client instance.
+        name (str): Registered model name.
+        version (str | int): Model version number.
+        timeout_s (int): Timeout in seconds before raising an error.
+
+    Raises:
+        TimeoutError: If the model version does not become READY in time.
+    """
     start = time.time()
     while time.time() - start < timeout_s:
         mv = client.get_model_version(name=name, version=version)
@@ -17,7 +43,19 @@ def wait_until_ready(client, name, version, timeout_s=120):
 
 
 def set_alias(alias, settings=Settings(), version=None):
-    """Set an alias for a specific model version."""
+    """
+    Assign a registered model alias to a specific version.
+
+    If no version is provided, the latest version is used.
+
+    Args:
+        alias (str): Alias name (e.g., 'staging', 'production').
+        settings (Settings): Project settings instance.
+        version (str | int, optional): Model version to assign alias to.
+
+    Returns:
+        str: Version number that the alias was set to.
+    """
     if settings.mlflow_tracking_uri:
         mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
 
@@ -39,7 +77,13 @@ def set_alias(alias, settings=Settings(), version=None):
 
 
 def delete_alias(alias, settings=Settings()):
-    """Delete an alias from the registered model."""
+    """
+    Remove a registered model alias.
+
+    Args:
+        alias (str): Alias name to delete.
+        settings (Settings): Project settings instance.
+    """
     if settings.mlflow_tracking_uri:
         mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
 
@@ -49,7 +93,14 @@ def delete_alias(alias, settings=Settings()):
 
 
 def promote_latest_auto(settings=Settings()):
-    """Promote latest version through staging → production."""
+    """
+    Promote the latest model version through staging → production.
+
+    Logic:
+        - If latest version has no alias → assign 'staging'
+        - If latest version is in staging → promote to 'production'
+        - If already in production → raise an error
+    """
     if settings.mlflow_tracking_uri:
         mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
 
@@ -69,14 +120,21 @@ def promote_latest_auto(settings=Settings()):
     elif "staging" in alias_for_latest:
         next_alias = "production"
     else:
-        raise ValueError(f"Already in production or unknown alias")
+        raise ValueError("Already in production or unknown alias")
 
     v = set_alias(next_alias, settings=settings, version=latest.version)
     print(f"Promoted version {v} of {model_name} to alias '{next_alias}'")
 
 
 def demote_latest_auto(settings=Settings()):
-    """Demote: production → staging, staging → remove alias."""
+    """
+    Demote the latest version from production → staging, or staging → no alias.
+
+    Priority:
+        1. If latest is in production, remove 'production'.
+        2. Else if in staging, remove 'staging'.
+        3. Else raise error.
+    """
     if settings.mlflow_tracking_uri:
         mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
 
@@ -91,13 +149,11 @@ def demote_latest_auto(settings=Settings()):
 
     latest_version = max(reverse_aliases.keys())
 
-    # Priority: remove production first if it exists
     if "production" in aliases:
         delete_alias("production", settings=settings)
         print(f"Removed alias 'production' from version {latest_version} of {model_name}")
         return
 
-    # If production not present, then handle staging
     if "staging" in aliases:
         delete_alias("staging", settings=settings)
         print(f"Removed alias 'staging' from version {latest_version} of {model_name}")
@@ -107,6 +163,7 @@ def demote_latest_auto(settings=Settings()):
 
 
 def main():
+    """Command-line interface for promoting or demoting MLflow model versions."""
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=["promote", "demote"])
     args = parser.parse_args()

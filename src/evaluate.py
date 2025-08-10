@@ -1,58 +1,114 @@
-from typing import Dict, Any
+"""
+Evaluation script for MLflow-registered Iris classification models.
 
+This module provides functions to evaluate the performance of models
+registered in MLflow, either by alias (e.g., 'production', 'staging'),
+or by retrieving the latest registered model version if no alias is provided.
+"""
+
+from typing import Dict, Any
 import argparse
+
+from sklearn.metrics import accuracy_score, f1_score
 
 import mlflow
 from mlflow.tracking import MlflowClient
 
-from sklearn.metrics import accuracy_score, f1_score
-
-from settings import Settings
-from src.data import load_iris_dataset
+from .settings import Settings
+from .data import load_iris_dataset
 
 
 def evaluate_registered(alias: str, model_name: str) -> Dict[str, Any]:
-    """Evaluate a model by alias (e.g., 'staging', 'production')."""
+    """
+    Evaluate a registered MLflow model by alias.
+
+    Args:
+        alias (str): Alias of the model (e.g., 'production', 'staging').
+        model_name (str): Name of the registered MLflow model.
+
+    Returns:
+        Dict[str, Any]: A dictionary containing alias, accuracy, and macro F1 score.
+    """
     uri = f"models:/{model_name}@{alias}"
     model = mlflow.pyfunc.load_model(uri)
 
-    X, y = load_iris_dataset(as_frame=True)
-    preds = model.predict(X)
+    features_df, target_series = load_iris_dataset(as_frame=True)
+    preds = model.predict(features_df)
 
-    acc = accuracy_score(y, preds)
-    f1 = f1_score(y, preds, average="macro")
+    return {
+        "alias": alias,
+        "accuracy": accuracy_score(target_series, preds),
+        "f1_macro": f1_score(target_series, preds, average="macro"),
+    }
 
-    return {"alias": alias, "accuracy": acc, "f1_macro": f1}
+
+def _evaluate_by_version(model_name: str, version: int) -> Dict[str, Any]:
+    """
+    Helper function to evaluate a model by version number.
+    """
+    uri = f"models:/{model_name}/{version}"
+    model = mlflow.pyfunc.load_model(uri)
+
+    features_df, target_series = load_iris_dataset(as_frame=True)
+    preds = model.predict(features_df)
+
+    return {
+        "version": version,
+        "accuracy": accuracy_score(target_series, preds),
+        "f1_macro": f1_score(target_series, preds, average="macro"),
+    }
 
 
-def evaluate_latest(settings: Settings = Settings(), alias: str = "production"):
-    """Evaluate the latest model registered under the given alias."""
+def evaluate_latest(settings: Settings = Settings(), alias: str = "production") -> Dict[str, Any]:
+    """
+    Evaluate the latest model version assigned to a given alias in MLflow.
+
+    If alias is None or empty, evaluate the latest registered version instead.
+
+    Args:
+        settings (Settings): Configuration settings including MLflow tracking URI.
+        alias (str): Model alias to evaluate (default: 'production').
+
+    Returns:
+        Dict[str, Any]: Evaluation metrics for the specified model alias or latest version.
+    """
     if settings.mlflow_tracking_uri:
         mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
 
     client = MlflowClient()
     model_name = settings.registered_model_name
 
-    # Check if alias exists
-    registered_model = client.get_registered_model(model_name)
-    aliases = registered_model.aliases or {}
+    if alias:
+        registered_model = client.get_registered_model(model_name)
+        aliases = registered_model.aliases or {}
 
-    if alias not in aliases:
-        raise ValueError(f"No alias '{alias}' found for model '{model_name}'.")
+        if alias not in aliases:
+            raise ValueError(f"No alias '{alias}' found for model '{model_name}'.")
 
-    version = aliases[alias]
-    metrics = evaluate_registered(alias=alias, model_name=model_name)
+        version = aliases[alias]
+        metrics = evaluate_registered(alias=alias, model_name=model_name)
+        print(f"Evaluation for alias '{alias}' (v{version}): {metrics}")
+        return metrics
 
-    print(f"Evaluation for alias '{alias}' (v{version}): {metrics}")
+    # No alias → evaluate latest registered version
+    latest_versions = client.get_latest_versions(model_name, stages=[])
+    if not latest_versions:
+        raise ValueError(f"No versions found for model '{model_name}'.")
+
+    latest_version = max(latest_versions, key=lambda v: int(v.version))
+    metrics = _evaluate_by_version(model_name, int(latest_version.version))
+    print(f"Evaluation for latest model version (v{latest_version.version}): {metrics}")
     return metrics
 
 
-def main():
-    parser = argparse.ArgumentParser()
+def main() -> None:
+    """Parse CLI arguments and evaluate a model alias or the latest registered version."""
+    parser = argparse.ArgumentParser(description="Evaluate a registered MLflow model.")
     parser.add_argument(
         "alias",
-        default="production",
-        help="Model alias to evaluate (default: production)",
+        nargs="?",
+        default=None,
+        help="Model alias to evaluate (default: None → latest registered version)",
     )
     args = parser.parse_args()
     evaluate_latest(alias=args.alias)

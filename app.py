@@ -1,6 +1,4 @@
-from gevent.monkey import patch_all
-patch_all()
-
+"""Entry point for running the Flask application."""
 from server import create_app
 
 
