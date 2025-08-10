@@ -16,16 +16,24 @@ def before_request():
 
 @api.get('/health')
 def health():
-    return {'model': current_app.config['MLFLOW_MODEL_NAME'], 'environment': \
-            os.getenv('FLASK_ENV', 'development'), 'status': 'ok'}, 200
+    response = {'model': current_app.config['MLFLOW_MODEL_NAME'], 'environment': \
+            os.getenv('FLASK_ENV', 'development'), 'status': 'ok'}
+
+    if not getattr(current_app, 'model', None):
+        response['status'] = 'not ok'
+
+    return response, 200
 
 
 @api.post('/predict')
 def predict():
+    if not getattr(current_app, 'model', None):
+        abort(503, f"{current_app.config['MLFLOW_MODEL_NAME']} model is not available for inference.")
+
     data = request.get_json(cache=True, force=True, silent=True)
 
     if not validate(data):
-        abort(400, 'Invalid request JSON data')
+        abort(400, 'Invalid request JSON data.')
     
     predictions = current_app.model.predict(data['inputs'])
         
@@ -47,6 +55,11 @@ def metrics():
 def bad_request(error):
     return {'error': error.description}, 400
 
+
+@api.errorhandler(503)
+def service_unavailable(error):
+    return {'error': error.description}, 503
+    
 
 @api.errorhandler(Exception)
 def exception(error):
