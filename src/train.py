@@ -54,7 +54,7 @@ class TrainContext:
 def plot_confusion_matrix(cm: np.ndarray, class_names: list, out_path: Path):
     """Plot and save a confusion matrix."""
     fig, ax = plt.subplots(figsize=(6, 6))
-    im = ax.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
+    im = ax.imshow(cm, interpolation="nearest")
     ax.figure.colorbar(im, ax=ax)
     ax.set(
         xticks=np.arange(cm.shape[1]),

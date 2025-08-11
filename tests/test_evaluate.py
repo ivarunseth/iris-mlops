@@ -39,7 +39,7 @@ def test_evaluate_by_version_returns_metrics(mock_load_model, mock_load_data):
 
 @patch("src.evaluate.evaluate_registered")
 @patch("src.evaluate.MlflowClient")
-def test_evaluate_latest_with_alias(mock_client_cls, mock_eval_registered):
+def test_evaluate_latest_with_alias(mock_client_cls, _mock_eval_registered):
     """It should evaluate using an alias when provided."""
     mock_client = MagicMock()
     mock_client_cls.return_value = mock_client

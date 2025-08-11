@@ -23,7 +23,7 @@ def small_settings_fixture():
 @pytest.fixture
 def dataset_split_fixture(settings):
     """Fixture creating a small dataset split."""
-    features, target = load_iris_dataset(as_frame=True)
+    features, target = load_iris_dataset()
     x_train, x_val, y_train, y_val = train_test_split(
         features,
         target,
