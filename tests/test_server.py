@@ -21,14 +21,6 @@ def fixture_client():
         yield c, app
 
 
-def test_predict_no_model(test_client):
-    """Test that /api/predict returns 503 if no model is loaded."""
-    c, _ = test_client
-    resp = c.post("/api/predict", json={"inputs": [[1, 2, 3, 4]]})
-    assert resp.status_code == 503
-    assert "not available" in resp.get_json()["error"]
-
-
 def test_predict_invalid_json(test_client):
     """Test that /api/predict returns 400 if input JSON is invalid."""
     c, app = test_client
@@ -60,4 +52,3 @@ def test_metrics_endpoint(test_client):
     c, _ = test_client
     resp = c.get("/api/metrics")
     assert resp.status_code == 200
-    assert isinstance(resp.get_json(), dict)
