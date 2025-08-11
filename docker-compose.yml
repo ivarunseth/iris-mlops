@@ -1,0 +1,25 @@
+services:
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.2.0
+    ports:
+      - "5000:5000"
+    environment:
+      MLFLOW_BACKEND_STORE_URI: sqlite:////mlflow/mlflow.db
+      MLFLOW_DEFAULT_ARTIFACT_ROOT: /mlflow/mlruns
+      GIT_PYTHON_REFRESH: quiet
+    volumes:
+      - ./mlflow:/mlflow
+    command: mlflow server --host 0.0.0.0 --port 5000
+
+  app:
+    image: ivarunseth/iris-mlops:latest
+    build: .
+    ports:
+      - "5001:5001"
+    env_file:
+      - .env
+    depends_on:
+      - mlflow
+    volumes:
+      - ./mlflow:/mlflow
+      - ./src:/app/src
