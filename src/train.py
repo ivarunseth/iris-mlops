@@ -23,8 +23,8 @@ from sklearn.tree import DecisionTreeClassifier
 import mlflow
 import mlflow.sklearn
 
-from src.settings import Settings
-from src.data import load_iris_dataset
+from settings import Settings
+from data import load_iris_dataset
 
 
 @dataclass

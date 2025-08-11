@@ -14,8 +14,8 @@ from sklearn.metrics import accuracy_score, f1_score
 import mlflow
 from mlflow.tracking import MlflowClient
 
-from src.settings import Settings
-from src.data import load_iris_dataset
+from settings import Settings
+from data import load_iris_dataset
 
 
 def evaluate_registered(alias: str, model_name: str) -> Dict[str, Any]:

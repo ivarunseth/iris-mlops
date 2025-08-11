@@ -10,7 +10,7 @@ from typing import Any, Dict
 import mlflow
 from mlflow.tracking import MlflowClient
 
-from src.settings import Settings
+from settings import Settings
 
 
 def register_best_model(best: Dict[str, Any], settings: Settings) -> str:

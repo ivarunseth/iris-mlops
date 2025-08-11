@@ -1,32 +1,25 @@
 """
-Data loading utilities for the Iris dataset.
+Data loading utilities for the Iris dataset with DVC tracking.
 
-Provides a helper function to load the Iris dataset from scikit-learn
-and return it as a pandas DataFrame and Series.
+Loads the Iris dataset from a local CSV (tracked by DVC) and returns
+it as a pandas DataFrame (features) and Series (target).
 """
 
 from typing import Tuple
-
 import pandas as pd
 
-from sklearn.datasets import load_iris
-from sklearn.utils import Bunch
 
-
-def load_iris_dataset(as_frame: bool = True) -> Tuple[pd.DataFrame, pd.Series]:
+def load_iris_dataset() -> Tuple[pd.DataFrame, pd.Series]:
     """
-    Load the Iris dataset.
+    Load the Iris dataset from a local CSV file tracked with DVC.
 
     Args:
         as_frame (bool): Whether to return the data as a pandas DataFrame/Series.
 
     Returns:
-        Tuple[pd.DataFrame, pd.Series]: A tuple containing:
-            - features_df: DataFrame with feature columns
-            - target_series: Series with target values
+        Tuple[pd.DataFrame, pd.Series]: (features_df, target_series)
     """
-    iris: Bunch = load_iris(as_frame=as_frame)  # type: ignore
-    features_df = iris.data  # pylint: disable=no-member
-    target_series = iris.target  # pylint: disable=no-member
-    features_df.columns = iris.feature_names  # pylint: disable=no-member
+    df = pd.read_csv('data/iris.csv')
+    features_df = df.drop(columns=["target"])
+    target_series = df["target"]
     return features_df, target_series
