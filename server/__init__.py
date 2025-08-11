@@ -77,4 +77,6 @@ def create_app(config_name=os.getenv('FLASK_ENV', 'development')):
 
     app.register_blueprint(api_bp)
 
+    app.logger.info('Application started')
+
     return app
