@@ -28,7 +28,7 @@ An inference server for iris classification using Flask with MLflow integration,
 1. Clone the repo:
 
    ```bash
-   git clone https://github.com/yourusername/iris-mlops.git
+   git clone https://github.com/ivarunseth/iris-mlops.git
    cd iris-mlops
    ```
 
@@ -80,15 +80,15 @@ An inference server for iris classification using Flask with MLflow integration,
 
 ### Start MLflow Tracking Server
 
-    ```bash
-    mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlflow/mlruns --host 0.0.0.0 --port 5000
-    ```
+   ```bash
+   mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlflow/mlruns --host 0.0.0.0 --port 5000
+   ```
 
 ### Run Flask API
 
-    ```bash
-    python app.py
-    ```
+   ```bash
+   python app.py
+   ```
 
 ---
 
@@ -96,9 +96,9 @@ An inference server for iris classification using Flask with MLflow integration,
 
 Start all services with Docker Compose:
 
-```bash
-docker compose up
-```
+   ```bash
+   docker compose up
+   ```
 
 ---
 
@@ -108,23 +108,23 @@ docker compose up
 
 Running in host system locally
 
-    ```bash
-    python src/train.py
-    python src/register.py
-    python src/stage.py promote
-    python src/evaluate.py <alias>
-    ```
+   ```bash
+   python -m src.train.py
+   python -m src.register.py
+   python -m src.stage.py <promote/demote>
+   python -m src.evaluate.py <None/staging/production>
+   ```
 
 ### With Docker
 
 Run training inside the app container:
 
-    ```bash
-    docker exec -it iris-mlops-app-1 python /app/src/train.py
-    docker exec -it iris-mlops-app-1 python /app/src/register.py
-    docker exec -it iris-mlops-app-1 python /app/src/stage.py promote
-    docker exec -it iris-mlops-app-1 python /app/src/evaluate.py <alias>
-    ```
+   ```bash
+   docker exec -it iris-mlops-app-1 python -m app.src/train.py
+   docker exec -it iris-mlops-app-1 python -m app.src/register.py
+   docker exec -it iris-mlops-app-1 python -m app.src/stage.py <promote/demote>
+   docker exec -it iris-mlops-app-1 python -m app.src/evaluate.py <None/staging/production>
+   ```
 
 This script will:
 
@@ -141,11 +141,11 @@ This script will:
 
 Send a POST request to predict endpoint:
 
-    ```bash
-    curl -X POST http://localhost:5001/api/predict \
-      -H "Content-Type: application/json" \
-      -d '{"inputs": [[5.1, 3.5, 1.4, 0.2]]}'
-    ```
+   ```bash
+   curl -X POST http://localhost:5001/api/predict \
+   -H "Content-Type: application/json" \
+   -d '{"inputs": [{"sepal length (cm)": 5.0, "sepal width (cm)": 1.0, "petal length (cm)": 4.0, "petal width (cm)": 1.0}]}'
+   ```
 
 ### With Docker
 
