@@ -1,9 +1,13 @@
-"""Module to train multiple classifiers on the Iris dataset with MLflow logging."""
+"""Train multiple classifiers on the Iris dataset with MLflow + DVC tracking."""
 
 from dataclasses import dataclass
 from typing import Any, Dict, Tuple
 from datetime import datetime
-import json
+from pathlib import Path
+import tempfile
+
+import matplotlib.pyplot as plt
+import numpy as np
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split, GridSearchCV
@@ -23,8 +27,8 @@ from sklearn.tree import DecisionTreeClassifier
 import mlflow
 import mlflow.sklearn
 
-from settings import Settings
-from data import load_iris_dataset
+from .settings import Settings
+from .data import load_iris_dataset
 
 
 @dataclass
@@ -43,84 +47,94 @@ class TrainContext:
     model: Any
     preprocess: Pipeline
     param_grid: dict
-    train_data: Tuple[Any, Any]  # (features_train, target_train)
-    val_data: Tuple[Any, Any]    # (features_val, target_val)
+    train_data: Tuple[Any, Any]
+    val_data: Tuple[Any, Any]
 
 
-def train_and_log_model(ctx: TrainContext) -> Tuple[Dict[str, float], str]:
-    """Train a single model with GridSearchCV, log to MLflow, and return metrics + run_id."""
+def plot_confusion_matrix(cm: np.ndarray, class_names: list, out_path: Path):
+    """Plot and save a confusion matrix."""
+    fig, ax = plt.subplots(figsize=(6, 6))
+    im = ax.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
+    ax.figure.colorbar(im, ax=ax)
+    ax.set(
+        xticks=np.arange(cm.shape[1]),
+        yticks=np.arange(cm.shape[0]),
+        xticklabels=class_names,
+        yticklabels=class_names,
+        ylabel="True label",
+        xlabel="Predicted label",
+        title="Confusion Matrix"
+    )
+
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+    fmt = "d"
+    thresh = cm.max() / 2.0
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            ax.text(
+                j,
+                i,
+                format(cm[i, j], fmt),
+                ha="center",
+                va="center",
+                color="white" if cm[i, j] > thresh else "black",
+            )
+    fig.tight_layout()
+    plt.savefig(out_path)
+    plt.close(fig)
+
+
+def train_and_log_model(ctx: TrainContext) -> Tuple[Dict[str, float], str, Any]:
+    """Train a single model, log to MLflow, and return metrics + run_id + best_model."""
     x_train, y_train = ctx.train_data
     x_val, y_val = ctx.val_data
 
-    pipeline = Pipeline([("preprocess", ctx.preprocess), ("model", ctx.model)])
-    grid = GridSearchCV(
-        estimator=pipeline,
-        param_grid=ctx.param_grid,
-        cv=3,
-        scoring="accuracy",
-        n_jobs=-1,
-    )
-    grid.fit(x_train, y_train)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
 
-    run_name = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with mlflow.start_run(run_name=run_name) as run:
-        best_pipeline = grid.best_estimator_
-        mlflow.log_param("algorithm", ctx.algorithm)
-        mlflow.log_params(grid.best_params_)
-
-        predictions = best_pipeline.predict(x_val)
-        metrics = {
-            "val_accuracy": accuracy_score(y_val, predictions),
-            "val_precision_macro": precision_score(
-                y_val, predictions, average="macro"
-            ),
-            "val_precision_weighted": precision_score(
-                y_val, predictions, average="weighted"
-            ),
-            "val_recall_macro": recall_score(
-                y_val, predictions, average="macro"
-            ),
-            "val_recall_weighted": recall_score(
-                y_val, predictions, average="weighted"
-            ),
-            "val_f1_macro": f1_score(y_val, predictions, average="macro"),
-            "val_f1_weighted": f1_score(y_val, predictions, average="weighted"),
-        }
-        mlflow.log_metrics(metrics)
-
-        with open("classification_report.json", "w", encoding="utf-8") as f:
-            json.dump(
-                classification_report(y_val, predictions, output_dict=True),
-                f,
-                indent=2,
-            )
-        mlflow.log_artifact("classification_report.json")
-
-        with open("confusion_matrix.json", "w", encoding="utf-8") as f:
-            json.dump(
-                confusion_matrix(y_val, predictions).tolist(),
-                f,
-                indent=2,
-            )
-        mlflow.log_artifact("confusion_matrix.json")
-
-        input_example = x_train.iloc[:2, :]
-        signature = mlflow.models.infer_signature(
-            x_train, best_pipeline.predict(x_train)
+        pipeline = Pipeline([("preprocess", ctx.preprocess), ("model", ctx.model)])
+        grid = GridSearchCV(
+            estimator=pipeline,
+            param_grid=ctx.param_grid,
+            cv=3,
+            scoring="accuracy",
+            n_jobs=-1,
         )
-        mlflow.sklearn.log_model(
-            best_pipeline,
-            name="model",
-            input_example=input_example,
-            signature=signature,
-        )
+        grid.fit(x_train, y_train)
 
-        print({
-            "event": "trained",
-            "algorithm": ctx.algorithm,
-            "best_params": grid.best_params_,
-            **metrics,
-        })
+        run_name = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with mlflow.start_run(run_name=run_name) as run:
+            best_pipeline = grid.best_estimator_
+            mlflow.log_param("algorithm", ctx.algorithm)
+            mlflow.log_params(grid.best_params_)
+
+            predictions = best_pipeline.predict(x_val)
+            metrics = {
+                "val_accuracy": accuracy_score(y_val, predictions),
+                "val_precision_macro": precision_score(y_val, predictions, average="macro"),
+                "val_precision_weighted": precision_score(y_val, predictions, average="weighted"),
+                "val_recall_macro": recall_score(y_val, predictions, average="macro"),
+                "val_recall_weighted": recall_score(y_val, predictions, average="weighted"),
+                "val_f1_macro": f1_score(y_val, predictions, average="macro"),
+                "val_f1_weighted": f1_score(y_val, predictions, average="weighted"),
+            }
+            mlflow.log_metrics(metrics)
+
+            # Save classification report as TXT
+            report_txt_path = tmp_path / "classification_report.txt"
+            with open(report_txt_path, "w", encoding="utf-8") as f:
+                f.write(classification_report(y_val, predictions))
+            mlflow.log_artifact(str(report_txt_path))
+
+            # Save confusion matrix as PNG
+            cm = confusion_matrix(y_val, predictions)
+            cm_png_path = tmp_path / "confusion_matrix.png"
+            plot_confusion_matrix(cm, class_names=list(np.unique(y_val)), out_path=cm_png_path)
+            mlflow.log_artifact(str(cm_png_path))
+
+            input_example = x_train.iloc[:2, :]
+            signature = mlflow.models.infer_signature(x_train, best_pipeline.predict(x_train))
+            mlflow.sklearn.log_model(best_pipeline, name="model", input_example=input_example, signature=signature)
 
         return metrics, run.info.run_id
 
@@ -175,7 +189,7 @@ def main(settings: Settings) -> Dict[str, Any]:
         mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
     mlflow.set_experiment(settings.experiment_name)
 
-    features, target = load_iris_dataset(as_frame=True)
+    features, target = load_iris_dataset()
     dataset = DatasetSplit(
         *train_test_split(
             features,

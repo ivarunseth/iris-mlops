@@ -14,8 +14,8 @@ from sklearn.metrics import accuracy_score, f1_score
 import mlflow
 from mlflow.tracking import MlflowClient
 
-from settings import Settings
-from data import load_iris_dataset
+from .settings import Settings
+from .data import load_iris_dataset
 
 
 def evaluate_registered(alias: str, model_name: str) -> Dict[str, Any]:
@@ -32,7 +32,7 @@ def evaluate_registered(alias: str, model_name: str) -> Dict[str, Any]:
     uri = f"models:/{model_name}@{alias}"
     model = mlflow.pyfunc.load_model(uri)
 
-    features_df, target_series = load_iris_dataset(as_frame=True)
+    features_df, target_series = load_iris_dataset()
     preds = model.predict(features_df)
 
     return {
@@ -49,7 +49,7 @@ def _evaluate_by_version(model_name: str, version: int) -> Dict[str, Any]:
     uri = f"models:/{model_name}/{version}"
     model = mlflow.pyfunc.load_model(uri)
 
-    features_df, target_series = load_iris_dataset(as_frame=True)
+    features_df, target_series = load_iris_dataset()
     preds = model.predict(features_df)
 
     return {
