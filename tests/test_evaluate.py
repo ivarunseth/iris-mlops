@@ -16,7 +16,7 @@ def test_evaluate_registered_returns_metrics(mock_load_model, mock_load_data):
     mock_load_model.return_value = mock_model
     mock_load_data.return_value = ([[1, 2], [3, 4]], [0, 1])
 
-    metrics = evaluate_registered(alias="production", model_name="IrisModel")
+    metrics = evaluate_registered(alias="production", model_name="iris_classifier")
     assert metrics["alias"] == "production"
     assert "accuracy" in metrics
     assert "f1_macro" in metrics
@@ -31,7 +31,7 @@ def test_evaluate_by_version_returns_metrics(mock_load_model, mock_load_data):
     mock_load_model.return_value = mock_model
     mock_load_data.return_value = ([[1, 2], [3, 4]], [0, 1])
 
-    metrics = _evaluate_by_version(model_name="IrisModel", version=5)
+    metrics = _evaluate_by_version(model_name="iris_classifier", version=5)
     assert metrics["version"] == 5
     assert "accuracy" in metrics
     assert "f1_macro" in metrics
@@ -43,14 +43,17 @@ def test_evaluate_latest_with_alias(mock_client_cls, mock_eval_registered):
     """It should evaluate using an alias when provided."""
     mock_client = MagicMock()
     mock_client_cls.return_value = mock_client
-    mock_client.get_registered_model.return_value.aliases = {"production": 7}
-    mock_eval_registered.return_value = {"alias": "production", "accuracy": 1.0, "f1_macro": 1.0}
+    mock_version = MagicMock()
+    mock_version.version = "1"
+    mock_version.alias = "production"
+
+    mock_client.get_model_version_by_alias.return_value = mock_version
 
     settings = Settings()
     result = evaluate_latest(settings=settings, alias="production")
 
-    assert result["alias"] == "production"
-    mock_eval_registered.assert_called_once()
+    assert result['version'] == '1'
+    assert result['accuracy'] > 0.9
 
 
 @patch("src.evaluate._evaluate_by_version")
@@ -61,8 +64,7 @@ def test_evaluate_latest_without_alias(mock_client_cls, mock_eval_by_version):
     mock_client_cls.return_value = mock_client
     mock_version = MagicMock()
     mock_version.version = "9"
-    mock_client.get_latest_versions.return_value = [mock_version]
-
+    mock_client.search_model_versions.return_value = [mock_version]
     mock_eval_by_version.return_value = {"version": 9, "accuracy": 1.0, "f1_macro": 1.0}
 
     settings = Settings()
