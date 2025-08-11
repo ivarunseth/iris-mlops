@@ -12,7 +12,7 @@ services:
     command: mlflow server --host 0.0.0.0 --port 5000
 
   app:
-    image: ivarunseth/iris-mlops:latest
+    image: varunseth2303/iris-mlops:latest
     build: .
     ports:
       - "5001:5001"
