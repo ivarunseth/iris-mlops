@@ -4,64 +4,69 @@ Utility functions and data structures for the Iris Inference Server.
 Includes:
 - Feature and class metadata
 - Request validation
-- Metrics tracking and aggregation
+- Prometheus metrics tracking
 - Exception formatting
 """
 
 from dataclasses import dataclass
 from typing import List
-
 import time
 import traceback
-import threading
 
-from collections import defaultdict, deque
+from flask import current_app, request
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 
-from flask import current_app
-
-
+# Model metadata
 features = [
     "sepal length (cm)",
     "sepal width (cm)",
     "petal length (cm)",
     "petal width (cm)"
 ]
-
 classes = ["setosa", "versicolor", "virginica"]
 
-# Module-private globals for metrics tracking
-_metrics_lock = threading.Lock()
-_TOTAL_REQUESTS = 0
-_TOTAL_LATENCY = 0.0
-_status_counts = defaultdict(int)
-_endpoint_counts = defaultdict(int)
-_request_timestamps = deque()
+# --- Prometheus metrics ---
+REQUEST_COUNT = Counter(
+    "iris_api_requests_total",
+    "Total HTTP requests processed by the inference API",
+    ["method", "endpoint", "http_status"]
+)
+
+REQUEST_LATENCY = Histogram(
+    "iris_api_request_latency_seconds",
+    "Request latency in seconds",
+    ["endpoint"],
+    buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10)
+)
+
+PREDICTION_COUNT = Counter(
+    "iris_api_predictions_total",
+    "Total number of predictions made",
+    ["model"]
+)
+
+ERROR_COUNT = Counter(
+    "iris_api_exceptions_total",
+    "Total exceptions encountered",
+    ["exception_type", "endpoint"]
+)
+
+MODEL_LOADED = Gauge(
+    "iris_api_model_loaded",
+    "1 if model loaded and ready, 0 otherwise",
+    ["model"]
+)
 
 
 @dataclass(frozen=True)
 class PredictRequest:
-    """
-    Data structure representing a prediction request.
-
-    Attributes:
-        inputs (List[List[float]]): List of feature vectors for prediction.
-    """
+    """Data structure representing a prediction request."""
     inputs: List[List[float]]
 
 
 def validate(payload) -> bool:
     """
     Validate the input payload for prediction.
-
-    Args:
-        payload (dict): The JSON payload from the client.
-
-    Returns:
-        bool: True if payload is valid, False otherwise.
-
-    Valid payloads must contain 'inputs' key with a non-empty list of feature vectors.
-    Each feature vector can be either a list of numbers matching features length
-    or a dict with keys matching the feature names.
     """
     if not isinstance(payload, dict) or "inputs" not in payload:
         return False
@@ -92,78 +97,49 @@ def validate(payload) -> bool:
 
 
 def timestamp():
-    """
-    Get the current time as a floating point number of seconds since the epoch.
-
-    Returns:
-        float: Current timestamp.
-    """
+    """Return the current time in seconds."""
     return time.time()
 
 
 def format_exception(e: Exception):
     """
     Format an exception into a JSON-serializable dictionary.
-
-    Includes the error message, exception type, and optionally the traceback
-    if the Flask app is in debug or testing mode.
-
-    Args:
-        e (Exception): The exception to format.
-
-    Returns:
-        dict: A dictionary with error details.
+    Also increments Prometheus ERROR_COUNT metric.
     """
+    ERROR_COUNT.labels(exception_type=type(e).__name__, endpoint=current_app.view_functions.get(request.endpoint, "unknown")).inc()
     exception = {'error': str(e), 'type': type(e).__name__}
-
     if current_app.debug or current_app.testing:
         exception.update({'traceback': traceback.format_exc()})
-
     return exception
 
 
-def append_request(endpoint: str, status_code: int, latency: float):
+def append_request(method: str, endpoint: str, status_code: int, latency: float):
     """
-    Append a completed request's metadata for metrics tracking.
-
-    This updates global counters and timestamps while ensuring thread safety.
-
-    Args:
-        endpoint (str): The API endpoint accessed.
-        status_code (int): HTTP status code returned.
-        latency (float): Time taken to handle the request in seconds.
+    Record request metrics for Prometheus.
     """
-    global _TOTAL_REQUESTS, _TOTAL_LATENCY  # pylint: disable=global-statement
+    REQUEST_COUNT.labels(method=method, endpoint=endpoint, http_status=status_code).inc()
+    REQUEST_LATENCY.labels(endpoint=endpoint).observe(latency)
 
-    now = time.time()
-    with _metrics_lock:
-        _TOTAL_REQUESTS += 1
-        _TOTAL_LATENCY += latency
-        _status_counts[status_code] += 1
-        _endpoint_counts[endpoint] += 1
-        _request_timestamps.append(now)
 
-        cutoff = now - current_app.config['REQUEST_STATS_WINDOW']
-        while _request_timestamps and _request_timestamps[0] < cutoff:
-            _request_timestamps.popleft()
+def mark_model_loaded(model_name: str, loaded: bool):
+    """
+    Mark a model as loaded or unloaded for Prometheus.
+    """
+    MODEL_LOADED.labels(model=model_name).set(1 if loaded else 0)
+
+
+def increment_prediction_count(model_name: str):
+    """
+    Increment prediction counter for a given model.
+    """
+    PREDICTION_COUNT.labels(model=model_name).inc()
 
 
 def get_metrics():
     """
-    Compute and return aggregated metrics about recent requests.
+    Generate Prometheus metrics exposition format output.
 
     Returns:
-        dict: Metrics including total requests, average latency (ms),
-              requests per second, status code counts, and endpoint counts.
+        tuple: (response_body: bytes, content_type: str)
     """
-    with _metrics_lock:
-        average_latency = (_TOTAL_LATENCY / _TOTAL_REQUESTS) if _TOTAL_REQUESTS > 0 else 0
-        requests_per_second = len(_request_timestamps) / current_app.config['REQUEST_STATS_WINDOW']
-
-        return {
-            "total_requests": _TOTAL_REQUESTS,
-            "average_latency": average_latency * 1000,  # Convert to milliseconds
-            "requests_per_second": requests_per_second,
-            "status_code_counts": dict(_status_counts),
-            "endpoint_counts": dict(_endpoint_counts)
-        }
+    return generate_latest(), CONTENT_TYPE_LATEST

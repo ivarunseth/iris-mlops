@@ -12,10 +12,6 @@ and automatically switches model stages accordingly.
 """
 
 import os
-import threading
-
-import time
-import atexit
 
 from flask import Flask, current_app
 
@@ -59,34 +55,6 @@ def load_configured_model(app: Flask = None):
         app.model = None
 
 
-def start_model_reload_thread(app: Flask, interval_seconds=300):
-    """
-    Start a background thread that periodically reloads the MLflow model.
-
-    The thread will run indefinitely, reloading the model every `interval_seconds`.
-    The reload function is run within the Flask application context 
-    to ensure proper resource access. Registers a cleanup function on 
-    program exit to log thread shutdown (thread is daemon so exits automatically).
-
-    Args:
-        app (Flask): The Flask app instance where the model will be reloaded.
-        interval_seconds (int, optional): Interval in seconds between model reloads.
-    """
-    def reload_loop():
-        while True:
-            with app.app_context():
-                load_configured_model(app)
-            time.sleep(interval_seconds)
-
-    thread = threading.Thread(target=reload_loop, daemon=True)
-    thread.start()
-
-    def cleanup():
-        app.logger.info("Shutting down model reload thread (daemon thread will exit automatically)")
-
-    atexit.register(cleanup)
-
-
 def create_app(config_name=os.getenv('FLASK_ENV', 'development')):
     """
     Factory function to create and configure the Flask application.
@@ -108,7 +76,5 @@ def create_app(config_name=os.getenv('FLASK_ENV', 'development')):
     load_configured_model(app)
 
     app.register_blueprint(api_bp)
-
-    start_model_reload_thread(app)
 
     return app
