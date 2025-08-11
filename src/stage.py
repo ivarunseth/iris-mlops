@@ -17,7 +17,7 @@ import argparse
 
 import mlflow
 
-from .settings import Settings
+from src.settings import Settings
 
 
 def wait_until_ready(client, name, version, timeout_s=120):

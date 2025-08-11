@@ -14,8 +14,8 @@ from sklearn.metrics import accuracy_score, f1_score
 import mlflow
 from mlflow.tracking import MlflowClient
 
-from .settings import Settings
-from .data import load_iris_dataset
+from src.settings import Settings
+from src.data import load_iris_dataset
 
 
 def evaluate_registered(alias: str, model_name: str) -> Dict[str, Any]:
@@ -79,23 +79,26 @@ def evaluate_latest(settings: Settings = Settings(), alias: str = "production") 
     model_name = settings.registered_model_name
 
     if alias:
-        registered_model = client.get_registered_model(model_name)
-        aliases = registered_model.aliases or {}
+        # Get all versions assigned to this stage (alias)
+        try:
+            model = client.get_model_version_by_alias(model_name, alias)
+        except mlflow.exceptions.RestException:
+            print(f"No versions found for model '{model_name}' at alias/stage '{alias}'")
+            return 
 
-        if alias not in aliases:
-            raise ValueError(f"No alias '{alias}' found for model '{model_name}'.")
-
-        version = aliases[alias]
-        metrics = evaluate_registered(alias=alias, model_name=model_name)
-        print(f"Evaluation for alias '{alias}' (v{version}): {metrics}")
+        # Pick the latest version by version number
+        metrics = _evaluate_by_version(model_name, model.version)
+        print(f"Evaluation for alias '{alias}' (v{model.version}): {metrics}")
         return metrics
 
-    # No alias → evaluate latest registered version
-    latest_versions = client.get_latest_versions(model_name, stages=[])
-    if not latest_versions:
+    # No alias → evaluate latest registered version (any stage)
+    # The stages param will be deprecated soon,
+    # but no alternative yet; for now we can get all versions
+    all_versions = client.search_model_versions(f"name='{model_name}'")
+    if not all_versions:
         raise ValueError(f"No versions found for model '{model_name}'.")
 
-    latest_version = max(latest_versions, key=lambda v: int(v.version))
+    latest_version = max(all_versions, key=lambda v: int(v.version))
     metrics = _evaluate_by_version(model_name, int(latest_version.version))
     print(f"Evaluation for latest model version (v{latest_version.version}): {metrics}")
     return metrics

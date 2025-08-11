@@ -26,8 +26,8 @@ class Settings:
         mlflow_tracking_uri (Optional[str]): URI for the MLflow tracking server.
         param_grids (Dict[str, Dict[str, Any]]): Hyperparameter grids for model tuning.
     """
-    experiment_name: str = "iris-classification"
-    registered_model_name: str = "iris_classifier"
+    experiment_name: str = "iris-flower-classification"
+    registered_model_name: str = "iris_flower_classifier"
     test_size: float = 0.2
     random_state: int = 42
     training_params: Dict[str, Any] = field(default_factory=lambda: {
@@ -55,3 +55,8 @@ class Settings:
             "model__criterion": ["gini", "entropy"],
         },
     })
+
+    @property
+    def max_iter(self) -> int:
+        """Return the max_iter training parameter."""
+        return self.training_params.get("max_iter", 100)

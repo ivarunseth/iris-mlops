@@ -35,4 +35,4 @@ COPY --chown=${USER}:${USER} . .
 
 EXPOSE 5001
 
-CMD ["gunicorn", "-b", "0.0.0.0:5001", "-k", "gevent", "-w", "1", "--access-logfile", "-", "--log-level", "info", "app:application"]
+CMD ["gunicorn", "-b", "0.0.0.0:5001", "-w", "1", "--access-logfile", "-", "--log-level", "info", "app:application"]
